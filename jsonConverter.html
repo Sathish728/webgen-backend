@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML to Template JSON Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="bg-white rounded-xl shadow-lg p-8 mb-6">
+            <h1 class="text-3xl font-bold mb-2 text-gray-900">HTML to Template JSON Converter</h1>
+            <p class="text-gray-600">Convert your HTML template to the correct JSON format for MongoDB/Postman</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Input Section -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4 text-gray-900">Input</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Template Name *</label>
+                        <input type="text" id="templateName" placeholder="e.g., Sathish Portfolio" 
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
+                        <select id="templateCategory" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="Portfolio">Portfolio</option>
+                            <option value="Business">Business</option>
+                            <option value="Blog">Blog</option>
+                            <option value="E-commerce">E-commerce</option>
+                            <option value="Landing Page">Landing Page</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                        <textarea id="templateDescription" rows="2" placeholder="Brief description of the template"
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Thumbnail URL</label>
+                        <input type="text" id="thumbnailUrl" placeholder="https://example.com/image.jpg"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">HTML Content *</label>
+                        <textarea id="htmlContent" rows="10" placeholder="Paste your complete HTML here..."
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">CSS (optional)</label>
+                        <textarea id="cssContent" rows="6" placeholder="Additional CSS styles..."
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">JavaScript (optional)</label>
+                        <textarea id="jsContent" rows="6" placeholder="Additional JavaScript..."
+                                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"></textarea>
+                    </div>
+
+                    <button onclick="convertToJSON()" 
+                            class="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-bold shadow-lg">
+                        Convert to JSON →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Output Section -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4 text-gray-900">Output (JSON for Postman)</h2>
+                
+                <div class="relative">
+                    <textarea id="jsonOutput" rows="30" readonly
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50"></textarea>
+                    
+                    <button onclick="copyToClipboard()" 
+                            class="absolute top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-semibold shadow-lg">
+                        📋 Copy JSON
+                    </button>
+                </div>
+
+                <div class="mt-4 space-y-2">
+                    <button onclick="downloadJSON()" 
+                            class="w-full bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition font-bold">
+                        💾 Download as .json File
+                    </button>
+                    
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h3 class="font-bold text-blue-900 mb-2">How to use in Postman:</h3>
+                        <ol class="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                            <li>Copy the JSON output</li>
+                            <li>Open Postman → POST request</li>
+                            <li>URL: <code class="bg-blue-100 px-2 py-0.5 rounded">http://localhost:4000/api/templates/add-template</code></li>
+                            <li>Headers: <code class="bg-blue-100 px-2 py-0.5 rounded">Content-Type: application/json</code></li>
+                            <li>Body → raw → Paste JSON</li>
+                            <li>Send request</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-lg mt-6">
+            <h3 class="font-bold text-yellow-900 mb-2">⚠️ Important Notes:</h3>
+            <ul class="text-sm text-yellow-800 space-y-2 list-disc list-inside">
+                <li>If your HTML includes <code>&lt;style&gt;</code> tags, extract CSS to the CSS field</li>
+                <li>If your HTML includes <code>&lt;script&gt;</code> tags, extract JS to the JS field</li>
+                <li>Or keep everything in HTML - the converter handles both formats</li>
+                <li>Make sure all image URLs are absolute (start with https://)</li>
+                <li>CDN links (Tailwind, FontAwesome) should remain in HTML</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function convertToJSON() {
+            const name = document.getElementById('templateName').value.trim();
+            const category = document.getElementById('templateCategory').value;
+            const description = document.getElementById('templateDescription').value.trim();
+            const thumbnail = document.getElementById('thumbnailUrl').value.trim();
+            const html = document.getElementById('htmlContent').value.trim();
+            const css = document.getElementById('cssContent').value.trim();
+            const js = document.getElementById('jsContent').value.trim();
+
+            if (!name || !html) {
+                alert('Please fill in at least Template Name and HTML Content');
+                return;
+            }
+
+            const templateObj = {
+                name: name,
+                category: category,
+                description: description,
+                thumbnail: thumbnail,
+                content: {
+                    html: html,
+                    css: css,
+                    js: js
+                },
+                isPremium: false
+            };
+
+            const jsonOutput = JSON.stringify(templateObj, null, 2);
+            document.getElementById('jsonOutput').value = jsonOutput;
+        }
+
+        function copyToClipboard() {
+            const jsonOutput = document.getElementById('jsonOutput');
+            if (!jsonOutput.value) {
+                alert('Please convert first!');
+                return;
+            }
+            
+            jsonOutput.select();
+            document.execCommand('copy');
+            
+            // Visual feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            btn.classList.add('bg-green-700');
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.classList.remove('bg-green-700');
+            }, 2000);
+        }
+
+        function downloadJSON() {
+            const jsonOutput = document.getElementById('jsonOutput').value;
+            if (!jsonOutput) {
+                alert('Please convert first!');
+                return;
+            }
+
+            const name = document.getElementById('templateName').value.trim() || 'template';
+            const filename = name.toLowerCase().replace(/\s+/g, '-') + '.json';
+            
+            const blob = new Blob([jsonOutput], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Auto-extract CSS and JS from HTML if present
+        document.getElementById('htmlContent').addEventListener('blur', function() {
+            const html = this.value;
+            const cssField = document.getElementById('cssContent');
+            const jsField = document.getElementById('jsContent');
+
+            // Only auto-extract if fields are empty
+            if (!cssField.value) {
+                const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+                if (styleMatch && styleMatch[1]) {
+                    cssField.value = styleMatch[1].trim();
+                }
+            }
+
+            if (!jsField.value) {
+                const scriptMatch = html.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+                if (scriptMatch && scriptMatch[1]) {
+                    // Remove attributes like src="" from the matched script
+                    if (!scriptMatch[0].includes('src=')) {
+                        jsField.value = scriptMatch[1].trim();
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

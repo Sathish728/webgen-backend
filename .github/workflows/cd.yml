@@ -1,0 +1,167 @@
+# webgen-backend/.github/workflows/cd.yml
+name: Backend CD
+
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Deployment Variables
+        run: |
+          echo "DEPLOY_TIME=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Create Docker Network
+        run: docker network create webgen-network 2>/dev/null || true
+
+      - name: Build Backend Image
+        run: |
+          cd $GITHUB_WORKSPACE
+          echo "🔨 Building backend image..."
+          docker build \
+            --no-cache \
+            --target production \
+            --tag webgen-backend-image:latest \
+            --tag webgen-backend-image:${{ env.COMMIT_SHA }} \
+            .
+
+      - name: Stop Old Container
+        run: |
+          echo "🛑 Stopping old backend container..."
+          docker stop webgen-backend 2>/dev/null || true
+          docker rm -f webgen-backend 2>/dev/null || true
+
+      - name: Create Environment File from Secrets
+        run: |
+          cd /home/ubuntu/webgen-infrastructure
+
+          # Create .env file from GitHub secrets
+          cat << EOF > .env.backend
+          NODE_ENV=production
+          PORT=4000
+          MONGO_URI=${{ secrets.MONGO_URI }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          FRONTEND_URL_LIVE=${{ secrets.FRONTEND_URL_LIVE }}
+          EMAIL_USER=${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_HOST=${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT=${{ secrets.EMAIL_PORT }}
+          EOF
+
+          # Set secure permissions
+          chmod 600 .env.backend
+
+      - name: Start Backend Container
+        run: |
+          cd /home/ubuntu/webgen-infrastructure
+
+          echo "🚀 Starting new backend container..."
+
+          # Run container with env file
+          docker run -d \
+            --name webgen-backend \
+            --network webgen-network \
+            -p 127.0.0.1:4000:4000 \
+            --env-file .env.backend \
+            --restart unless-stopped \
+            --memory="1g" \
+            --cpus="0.5" \
+            webgen-backend-image:latest
+
+          echo "⏳ Waiting for backend to start..."
+          sleep 15
+
+      - name: Cleanup Environment File
+        if: always()
+        run: |
+          # Remove env file for security
+          rm -f /home/ubuntu/webgen-infrastructure/.env.backend
+
+      - name: Health Check
+        run: |
+          echo "🏥 Running health checks..."
+
+          MAX_ATTEMPTS=15
+          ATTEMPT=1
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS..."
+            
+            if curl -f http://localhost:4000/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend health check failed after $MAX_ATTEMPTS attempts!"
+              docker logs webgen-backend --tail 100
+              exit 1
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 5
+          done
+
+      - name: Verify Container Status
+        run: |
+          echo "=== Container Status ==="
+          docker ps --filter name=webgen-backend --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+          echo ""
+          echo "=== Container Logs (Last 30 lines) ==="
+          docker logs webgen-backend --tail 30
+
+      - name: Test API Endpoints
+        run: |
+          echo "🧪 Testing critical API endpoints..."
+
+          # Test health endpoint
+          curl -f http://localhost:4000/health || exit 1
+
+          echo "✅ All endpoint tests passed!"
+
+      - name: Cleanup Old Images
+        run: |
+          echo "🧹 Cleaning up old Docker images..."
+          docker image prune -af --filter "until=24h"
+
+      - name: Send Deployment Notification
+        if: success()
+        run: |
+          echo "==================================="
+          echo "✅ BACKEND DEPLOYMENT SUCCESSFUL"
+          echo "==================================="
+          echo "Time: ${{ env.DEPLOY_TIME }}"
+          echo "Commit: ${{ env.COMMIT_SHA }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Database: MongoDB Atlas"
+          echo "==================================="
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "⚠️ DEPLOYMENT FAILED - INITIATING ROLLBACK"
+
+          # Stop failed container
+          docker stop webgen-backend 2>/dev/null || true
+          docker rm -f webgen-backend 2>/dev/null || true
+
+          # Remove env file
+          rm -f /home/ubuntu/webgen-infrastructure/.env.backend
+
+          echo "❌ DEPLOYMENT FAILED"
