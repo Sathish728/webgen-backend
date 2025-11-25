@@ -35,7 +35,7 @@ app.use(helmet({
 }));
 
 const allowedOrigins = [
-  "http://13.126.233.149:3000",
+  "http://54.234.33.110",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://webgen.club",
