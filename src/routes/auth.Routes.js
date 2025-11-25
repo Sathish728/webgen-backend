@@ -1,6 +1,6 @@
 import express from 'express'
 import { logAuthEvent, protectRoute, securityHeaders } from '../middleware/auth.middleware.js'
-import { forgotPassword, getCurrentUser, logIn, logOut, refreshAccessToken, resendVerificationOTP, resetPassword, signUp, verifyEmailOTP, verifyResetOTP } from '../controllers/auth.Controller.js';
+import { forgotPassword, getCurrentUser, logIn, logOut, refreshAccessToken, resendVerificationOTP, resetPassword, signUp, verifyEmailOTP, verifyResetOTP } from '../controllers/auth.controller.js';
 
 
 const router = express.Router()
