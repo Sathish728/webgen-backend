@@ -153,10 +153,10 @@ app.use((err, req, res, next) => {
   // Default error
   res.status(err.status || 500).json({
     success: false,
-    message: NODE_ENV === 'production' 
+    message: process.env.NODE_ENV === 'production' 
       ? 'Internal server error' 
       : err.message,
-    ...(NODE_ENV === 'development' && { stack: err.stack })
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 
