@@ -12,6 +12,7 @@ import webhookRouter   from "./routes/webhook.Routes.js"
 import compression from 'compression'
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoose from 'mongoose'
 
 
 // Define __filename and __dirname manually (for ES modules)
