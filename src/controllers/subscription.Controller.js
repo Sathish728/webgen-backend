@@ -1,16 +1,17 @@
-// controllers/subscriptionController.js - Improved Version
-import Subscription from'../models/Subscription.model.js'
-import Website from'../models/Website.model.js'
-import dotenv from'dotenv'
+// controllers/subscriptionController.js - FIXED VERSION
+import Subscription from '../models/Subscription.model.js'
+import Website from '../models/Website.model.js'
+import dotenv from 'dotenv'
 dotenv.config();
 
 import Stripe from 'stripe'
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 /**
  * Create a new subscription checkout session
  * @route POST /api/templates/subscribe
  */
-export async function createSubscription  (req, res) {
+export async function createSubscription(req, res) {
   try {
     const { priceId, email, websiteId, userId } = req.body;
 
@@ -67,11 +68,26 @@ export async function createSubscription  (req, res) {
       });
     }
 
+    // ========================================
+    // FIX: Properly determine frontend URL
+    // ========================================
     const FRONTEND_URL = process.env.NODE_ENV === "production" 
       ? process.env.FRONTEND_URL_LIVE 
       : process.env.FRONTEND_URL;
 
-    // Create Stripe checkout session
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Frontend URL:', FRONTEND_URL);
+
+    // Validate URL before sending to Stripe
+    if (!FRONTEND_URL || !FRONTEND_URL.startsWith('http')) {
+      console.error('Invalid FRONTEND_URL:', FRONTEND_URL);
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error: Invalid frontend URL"
+      });
+    }
+
+    // Create Stripe checkout session with PROPER URL
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ 
@@ -79,8 +95,8 @@ export async function createSubscription  (req, res) {
         quantity: 1 
       }],
       customer_email: email,
-      success_url: `${process.env.FRONTEND_URL_LIVE}/user-websites?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${process.env.FRONTEND_URL_LIVE}/pricing?canceled=true`,
+      success_url: `${FRONTEND_URL}/user-websites?session_id={CHECKOUT_SESSION_ID}&success=true`,
+      cancel_url: `${FRONTEND_URL}/pricing?canceled=true`,
       metadata: {
         websiteId: websiteId,
         userId: userId,
@@ -92,11 +108,13 @@ export async function createSubscription  (req, res) {
           userId: userId,
         }
       },
-      allow_promotion_codes: true, // Allow discount codes
+      allow_promotion_codes: true,
       billing_address_collection: 'auto',
     });
 
-    console.log("Stripe session created:", session.id);
+    console.log("✅ Stripe session created:", session.id);
+    console.log("Success URL:", session.success_url);
+    console.log("Cancel URL:", session.cancel_url);
 
     res.status(200).json({
       success: true,
@@ -108,14 +126,15 @@ export async function createSubscription  (req, res) {
     });
 
   } catch (error) {
-    console.error("Stripe subscription error:", error);
+    console.error("❌ Stripe subscription error:", error);
     
     // Handle Stripe-specific errors
     if (error.type === 'StripeInvalidRequestError') {
       return res.status(400).json({
         success: false,
         message: "Invalid request to Stripe",
-        error: error.message
+        error: error.message,
+        details: error.param ? `Problem with parameter: ${error.param}` : null
       });
     }
 
@@ -125,13 +144,13 @@ export async function createSubscription  (req, res) {
       error: error.message
     });
   }
-};
+}
 
 /**
  * Check if user has active subscription for a website
  * @route GET /api/templates/check/:userId/:websiteId
  */
-export async function checkSubscription  (req, res) {
+export async function checkSubscription(req, res) {
   try {
     const { userId, websiteId } = req.params;
 
@@ -177,14 +196,11 @@ export async function checkSubscription  (req, res) {
       error: error.message
     });
   }
-};
-
-
+}
 
 /**
  * Cancel a subscription
  * @route POST /api/templates/cancel-subscription
- * @body { subscriptionId, userId, cancelImmediately?: boolean }
  */
 export async function cancelSubscription(req, res) {
   try {
@@ -192,7 +208,6 @@ export async function cancelSubscription(req, res) {
 
     console.log('Cancel request:', { subscriptionId, userId, cancelImmediately });
 
-    // Validation
     if (!subscriptionId) {
       return res.status(400).json({
         success: false,
@@ -200,7 +215,6 @@ export async function cancelSubscription(req, res) {
       });
     }
 
-    // Find subscription in database
     const subscription = await Subscription.findOne({ subscriptionId });
 
     if (!subscription) {
@@ -210,7 +224,6 @@ export async function cancelSubscription(req, res) {
       });
     }
 
-    // Verify ownership if userId provided
     if (userId && subscription.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
@@ -218,7 +231,6 @@ export async function cancelSubscription(req, res) {
       });
     }
 
-    // Check if already canceled
     if (subscription.status === 'canceled') {
       return res.status(400).json({
         success: false,
@@ -231,49 +243,33 @@ export async function cancelSubscription(req, res) {
     let cancelAt = null;
 
     if (cancelImmediately) {
-      // ===== IMMEDIATE CANCELLATION =====
       console.log('Canceling immediately in Stripe...');
-      
       updatedStripeSubscription = await stripe.subscriptions.cancel(subscriptionId);
-
-      // Update database
       subscription.status = 'canceled';
       subscription.canceledAt = new Date();
       subscription.cancelAtPeriodEnd = false;
       subscription.endedAt = new Date();
-      subscription.currentPeriodEnd = new Date(); // Ends now
-
+      subscription.currentPeriodEnd = new Date();
       message = "Subscription canceled immediately";
       cancelAt = new Date();
-
     } else {
-      // ===== CANCEL AT PERIOD END =====
       console.log('Setting cancel at period end in Stripe...');
-      
       updatedStripeSubscription = await stripe.subscriptions.update(
         subscriptionId,
         { cancel_at_period_end: true }
       );
-
-      // Update database
       subscription.cancelAtPeriodEnd = true;
       subscription.canceledAt = new Date();
       subscription.status = updatedStripeSubscription.status || 'active';
-
       message = "Subscription will be canceled at the end of billing period";
-      
-      // Get cancelation date
       cancelAt = updatedStripeSubscription.cancel_at 
         ? new Date(updatedStripeSubscription.cancel_at * 1000)
         : subscription.currentPeriodEnd;
     }
 
-    // Save to database
     await subscription.save();
+    console.log('✅ Subscription updated successfully');
 
-    console.log('Subscription updated successfully');
-
-    // Return response
     res.status(200).json({
       success: true,
       message,
@@ -290,9 +286,8 @@ export async function cancelSubscription(req, res) {
     });
 
   } catch (error) {
-    console.error("Error canceling subscription:", error);
+    console.error("❌ Error canceling subscription:", error);
 
-    // Handle specific Stripe errors
     if (error.type === 'StripeInvalidRequestError') {
       return res.status(400).json({
         success: false,
@@ -309,7 +304,6 @@ export async function cancelSubscription(req, res) {
       });
     }
 
-    // Generic error
     res.status(500).json({
       success: false,
       message: "Failed to cancel subscription",
@@ -318,16 +312,14 @@ export async function cancelSubscription(req, res) {
   }
 }
 
-
 /**
  * Get subscription details
  * @route GET /api/templates/subscription-details/:userId/:websiteId
  */
-export async function getSubscriptionDetails  (req, res)  {
+export async function getSubscriptionDetails(req, res) {
   try {
     const { userId, websiteId } = req.params;
 
-    // Validate ObjectIds
     if (!userId.match(/^[0-9a-fA-F]{24}$/) || !websiteId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
@@ -335,12 +327,9 @@ export async function getSubscriptionDetails  (req, res)  {
       });
     }
 
-    const subscription = await Subscription.findOne({
-      userId,
-      websiteId
-    })
-    .sort({ createdAt: -1 }) // Get most recent
-    .lean();
+    const subscription = await Subscription.findOne({ userId, websiteId })
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (!subscription) {
       return res.status(404).json({
@@ -349,7 +338,6 @@ export async function getSubscriptionDetails  (req, res)  {
       });
     }
 
-    // Get additional details from Stripe
     let stripeDetails = null;
     try {
       const stripeSubscription = await stripe.subscriptions.retrieve(subscription.subscriptionId);
@@ -376,8 +364,6 @@ export async function getSubscriptionDetails  (req, res)  {
         currentPeriodEnd: subscription.currentPeriodEnd,
         canceledAt: subscription.canceledAt,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-        isActive: subscription.isActive(),
-        willRenew: subscription.willRenew(),
         stripeDetails: stripeDetails,
         createdAt: subscription.createdAt,
         updatedAt: subscription.updatedAt
@@ -392,13 +378,13 @@ export async function getSubscriptionDetails  (req, res)  {
       error: error.message
     });
   }
-};
+}
 
 /**
  * Reactivate a canceled subscription
  * @route POST /api/templates/reactivate-subscription
  */
-export async function reactivateSubscription  (req, res) {
+export async function reactivateSubscription(req, res) {
   try {
     const { subscriptionId, userId } = req.body;
 
@@ -418,7 +404,6 @@ export async function reactivateSubscription  (req, res) {
       });
     }
 
-    // Verify ownership
     if (userId && subscription.userId.toString() !== userId) {
       return res.status(403).json({
         success: false,
@@ -426,7 +411,6 @@ export async function reactivateSubscription  (req, res) {
       });
     }
 
-    // Check if subscription is set to cancel
     if (!subscription.cancelAtPeriodEnd) {
       return res.status(400).json({
         success: false,
@@ -434,13 +418,11 @@ export async function reactivateSubscription  (req, res) {
       });
     }
 
-    // Reactivate in Stripe
     const updatedStripeSubscription = await stripe.subscriptions.update(
       subscriptionId,
       { cancel_at_period_end: false }
     );
 
-    // Update database
     subscription.cancelAtPeriodEnd = false;
     subscription.status = 'active';
     await subscription.save();
@@ -463,13 +445,13 @@ export async function reactivateSubscription  (req, res) {
       error: error.message
     });
   }
-};
+}
 
 /**
  * Get all subscriptions for a user
  * @route GET /api/templates/user-subscriptions/:userId
  */
-export async function getUserSubscriptions  (req, res)  {
+export async function getUserSubscriptions(req, res) {
   try {
     const { userId } = req.params;
 
@@ -507,4 +489,4 @@ export async function getUserSubscriptions  (req, res)  {
       error: error.message
     });
   }
-};
+}
