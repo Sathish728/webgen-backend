@@ -55,6 +55,7 @@ jobs:
           JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_WEBHOOK_SECRET_LIVE=${{ secrets.STRIPE_WEBHOOK_SECRET_LIVE }}
           FRONTEND_URL=${{ secrets.FRONTEND_URL }}
           FRONTEND_URL_LIVE=${{ secrets.FRONTEND_URL_LIVE }}
           EMAIL_USER=${{ secrets.EMAIL_USER }}

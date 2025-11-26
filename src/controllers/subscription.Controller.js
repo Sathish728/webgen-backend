@@ -79,8 +79,8 @@ export async function createSubscription  (req, res) {
         quantity: 1 
       }],
       customer_email: email,
-      success_url: `${FRONTEND_URL_LIVE}/user-websites?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${FRONTEND_URL_LIVE}/pricing?canceled=true`,
+      success_url: `${process.env.FRONTEND_URL_LIVE}/user-websites?session_id={CHECKOUT_SESSION_ID}&success=true`,
+      cancel_url: `${process.env.FRONTEND_URL_LIVE}/pricing?canceled=true`,
       metadata: {
         websiteId: websiteId,
         userId: userId,
