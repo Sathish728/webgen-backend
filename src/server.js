@@ -13,6 +13,7 @@ import compression from 'compression'
 import path from "path";
 import { fileURLToPath } from "url";
 import mongoose from 'mongoose'
+import { proxyCustomDomain } from './controllers/proxyController.js';
 
 
 // Define __filename and __dirname manually (for ES modules)
@@ -79,6 +80,10 @@ app.use(compression()); // Compress responses
 
 // Static files
 app.use("/templates", express.static(path.join(__dirname, "templates")));
+
+// Add this BEFORE app.use("/api/auth", authRoutes)
+app.get('/api/websites/proxy', proxyCustomDomain);
+
 
 
 app.use("/api/auth", authRoutes)
